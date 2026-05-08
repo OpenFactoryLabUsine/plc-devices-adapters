@@ -4,14 +4,17 @@
 #include <mbed_rtc_time.h>
 #include <Arduino_OPC_UA.h>
 
-#include "io_manager.h"
-#include "ivac.h"
-#include "opc_ua_server.h"
+#include "io_manager/io_manager.h"
+#include "ivac/ivac.h"
+#include "config/ivac_config.h"
+#include "opcua_server/opcua_server.h"
 
 REDIRECT_STDOUT_TO(Serial)
 
-DeviceManager deviceManager;
-OpcuaServer   opcuaServer(deviceManager);
+IVAC ivac;
+OPCUAServer opcuaServer(ivac);
+
+rtos::Thread opc_ua_server_thread(osPriorityNormal, 16 * 1024UL);
 
 void setup() {
     Serial.begin(115200);
@@ -19,8 +22,7 @@ void setup() {
 
     IoManager::initPins();
 
-    IPAddress ip(10, 68, 14, 15);
-    Ethernet.begin(ip);
+    Ethernet.begin(IVACConfig::Network::IP);
     Serial.print("IP: ");
     Serial.println(Ethernet.localIP());
 
@@ -36,15 +38,15 @@ void setup() {
 
     opcuaServer.startThread();
 
-    deviceManager.setBuzzer(BuzzerState::WARNING);
+    ivac.setBuzzer(BuzzerState::WARNING);
 
     Serial.print("OPC UA running at opc.tcp://");
     Serial.print(Ethernet.localIP());
-    Serial.println(":4840");
+    Serial.println(":4840"); // Port par défaut dans lib Arduino OPC-UA
 }
 
 void loop() {
     OptaController.update();
-    deviceManager.updateStates();
+    ivac.updateStates();
     delay(100);
 }

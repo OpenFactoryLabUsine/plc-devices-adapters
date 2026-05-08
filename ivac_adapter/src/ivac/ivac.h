@@ -3,9 +3,9 @@
 
 enum class BuzzerState { NORMAL, FAULT, WARNING, UNKNOWN };
 
-class DeviceManager {
+class IVAC {
 public:
-    DeviceManager();
+    IVAC();
 
     void setBuzzer(BuzzerState state);
     BuzzerState getBuzzerState() const;
@@ -17,7 +17,7 @@ public:
     String getGateState(uint8_t index) const;
     void updateStates();
 
-    static BuzzerState parseCommand(const String& cmd);
+    static BuzzerState parseBuzzerCommand(const String& cmd);
     static String buzzerStateToString(BuzzerState state);
 
     static constexpr uint8_t TOOLPLUS_NB = 3;
@@ -28,3 +28,4 @@ private:
     bool _simulationMode;
     String _toolState[TOOLPLUS_NB];
     String _gateState[GATE_NB];
+};
