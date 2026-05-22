@@ -16,6 +16,21 @@ OPCUAServer opcuaServer(ivac);
 
 rtos::Thread opc_ua_server_thread(osPriorityNormal, 16 * 1024UL);
 
+time_t get_build_timestamp() {
+    struct tm t = {0};
+    char month[4];
+    int day, year;
+    const char *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    
+    if (sscanf(__DATE__, "%s %d %d", month, &day, &year) == 3) {
+        t.tm_mon = (strstr(months, month) - months) / 3;
+        t.tm_mday = day;
+        t.tm_year = year - 1900;
+        return mktime(&t);
+    }
+    return 0; // Fallback
+}
+
 void setup() {
     Serial.begin(115200);
     while (!Serial);
@@ -26,7 +41,7 @@ void setup() {
     Serial.print("IP: ");
     Serial.println(Ethernet.localIP());
 
-    set_time(opcua::timeToStr(__DATE__));
+    set_time(get_build_timestamp());
 
     OptaController.begin();
     OptaController.update();
