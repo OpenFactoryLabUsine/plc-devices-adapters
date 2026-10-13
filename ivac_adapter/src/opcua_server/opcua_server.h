@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Arduino_OPC_UA.h>
+#include <atomic>
 #include <rtos.h>
 #include "ivac/ivac.h"
 
@@ -13,6 +14,7 @@ public:
 
     bool begin();
     void startThread();
+    void updateVariables();
 
 private:
     IVAC& _ivac;
@@ -20,6 +22,9 @@ private:
     UA_Server*      _server;
     UA_UInt16       _namespaceIdx;
     UA_NodeId       _deviceNodeId;
+    std::atomic<uint8_t> _publishedStates;
+    uint8_t _lastWrittenStates;
+    UA_UInt64 _updateCallbackId;
 
     static constexpr size_t STACK_SIZE = 16 * 1024UL;
     static constexpr size_t HEAP_SIZE  = 320 * 1024UL;
@@ -40,6 +45,7 @@ private:
 
     UA_StatusCode addMethods();
     UA_StatusCode addMethod(const char* name, UA_MethodCallback callback);
+    static void updateVariableNodesCallback(UA_Server* server, void* data);
 
     static UA_StatusCode buzzerCallback(UA_Server*, const UA_NodeId*, void*,
                                         const UA_NodeId*, void*, const UA_NodeId*, void*,

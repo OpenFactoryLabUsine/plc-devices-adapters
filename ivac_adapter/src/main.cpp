@@ -46,6 +46,9 @@ void setup() {
     OptaController.begin();
     OptaController.update();
 
+    ivac.updateStates();
+    opcuaServer.updateVariables();
+
     if (!opcuaServer.begin()) {
         Serial.println("ERROR: OPC UA heap init failed");
         for(;;) {}
@@ -63,5 +66,6 @@ void setup() {
 void loop() {
     OptaController.update();
     ivac.updateStates();
+    opcuaServer.updateVariables();
     delay(100);
 }

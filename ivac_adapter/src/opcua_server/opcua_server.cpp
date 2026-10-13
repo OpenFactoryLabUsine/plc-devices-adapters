@@ -15,6 +15,9 @@ OPCUAServer::OPCUAServer(IVAC& ivac)
       _server(nullptr),
       _namespaceIdx(0),
       _deviceNodeId(UA_NODEID_NULL),
+      _publishedStates(0),
+      _lastWrittenStates(0xFF),
+      _updateCallbackId(0),
       _heap(nullptr)
 {}
 
@@ -40,6 +43,22 @@ void OPCUAServer::startThread() {
     });
 }
 
+void OPCUAServer::updateVariables() {
+    uint8_t states = 0;
+
+    for (uint8_t i = 0; i < IVAC::TOOLPLUS_NB; ++i) {
+        if (_ivac.getToolState(i) == "ON")
+            states |= static_cast<uint8_t>(1U << i);
+    }
+
+    for (uint8_t i = 0; i < IVAC::GATE_NB; ++i) {
+        if (_ivac.getGateState(i) == "CLOSED")
+            states |= static_cast<uint8_t>(1U << (IVAC::TOOLPLUS_NB + i));
+    }
+
+    _publishedStates.store(states, std::memory_order_relaxed);
+}
+
 UA_StatusCode OPCUAServer::initializeServer() {
     UA_StatusCode status = createNamespaceAndDevice();
     if (status != UA_STATUSCODE_GOOD) return status;
@@ -47,7 +66,14 @@ UA_StatusCode OPCUAServer::initializeServer() {
     status = addAllVariables();
     if (status != UA_STATUSCODE_GOOD) return status;
 
-    return addMethods();
+    status = addMethods();
+    if (status != UA_STATUSCODE_GOOD) return status;
+
+    return UA_Server_addRepeatedCallback(_server,
+                                         &OPCUAServer::updateVariableNodesCallback,
+                                         this,
+                                         100.0,
+                                         &_updateCallbackId);
 }
 
 UA_StatusCode OPCUAServer::createNamespaceAndDevice() {
@@ -92,13 +118,38 @@ UA_StatusCode OPCUAServer::addVariable(const char* name) {
     attr.accessLevel = UA_ACCESSLEVELMASK_READ;
 
     return UA_Server_addVariableNode(_server,
-                                     UA_NODEID_NULL,
+                                     UA_NODEID_STRING(_namespaceIdx, (char*)name),
                                      _deviceNodeId,
                                      UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
                                      UA_QUALIFIEDNAME(_namespaceIdx, (char*)name),
                                      UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE),
                                      attr,
                                      NULL, NULL);
+}
+
+void OPCUAServer::updateVariableNodesCallback(UA_Server* server, void* data) {
+    OPCUAServer* self = static_cast<OPCUAServer*>(data);
+    const uint8_t states = self->_publishedStates.load(std::memory_order_relaxed);
+    if (states == self->_lastWrittenStates) return;
+
+    for (size_t i = 0; i < IVACConfig::OpcUa::VARIABLE_NAMES.size(); ++i) {
+        UA_NodeId nodeId = UA_NODEID_STRING(
+            self->_namespaceIdx,
+            (char*)IVACConfig::OpcUa::VARIABLE_NAMES[i]);
+            
+        UA_Float value = (states & static_cast<uint8_t>(1U << i)) ? 1.0f : 0.0f;
+        UA_Variant variant;
+        UA_Variant_setScalar(&variant, &value, &UA_TYPES[UA_TYPES_FLOAT]);
+
+        UA_StatusCode status = UA_Server_writeValue(server, nodeId, variant);
+        if (status != UA_STATUSCODE_GOOD) {
+            Serial.print("OPC UA variable update failed: ");
+            Serial.println(UA_StatusCode_name(status));
+            return;
+        }
+    }
+
+    self->_lastWrittenStates = states;
 }
 
 UA_StatusCode OPCUAServer::addMethods() {
